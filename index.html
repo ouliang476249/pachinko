@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>弹珠机概率统计器</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Arial;background:linear-gradient(135deg,#667eea,#764ba2);padding:20px}
+.container{max-width:900px;margin:auto;background:white;border-radius:20px;padding:25px;box-shadow:0 10px 25px rgba(0,0,0,.3)}
+h1{text-align:center;margin-bottom:20px}
+.sect{text-align:center;margin-bottom:20px}
+input,select,button{padding:8px 12px;font-size:16px;border-radius:6px;border:1px solid #ccc;margin:3px}
+button{background:#4CAF50;color:white;cursor:pointer}
+.delete-btn{background:#f44336}
+.drop-position{display:flex;justify-content:center;gap:15px;margin-bottom:20px}
+.drop-position button{padding:10px 20px;border:none;background:#e0e0e0}
+.drop-position .active{background:#2196F3;color:white}
+.holes{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:25px}
+.hole{background:#f5f5f5;padding:10px;border-radius:10px;text-align:center;border:2px solid #ddd}
+.hole-btns{display:flex;justify-content:center;gap:8px;margin:5px 0}
+.hole-btns button{width:35px;height:35px;border-radius:50%;border:none;font-size:18px}
+.add{background:#4CAF50;color:white}
+.remove{background:#f44336;color:white}
+.count{font-size:20px;font-weight:bold;color:#2196F3}
+.chart{display:flex;align-items:flex-end;height:300px;gap:6px}
+.bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center}
+.bar{width:100%;background:linear-gradient(to top,#4CAF50,#8BC34A);border-radius:5px 5px 0 0;position:relative}
+.bar-val{position:absolute;top:-35px;left:50%;transform:translateX(-50%);font-size:11px;text-align:center}
+.bar-label{margin-top:6px;font-size:12px}
+.stats{text-align:center;margin-top:15px;font-size:16px}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h1>弹珠机概率统计器</h1>
+
+<div class="sect">
+<input id="newMachine" placeholder="新机器名称">
+<button onclick="addMachine()">添加</button>
+<select id="machineList" onchange="changeMachine()"></select>
+<button class="delete-btn" onclick="deleteMachine()">删除机器</button>
+<button onclick="exportCSV()">导出CSV</button>
+</div>
+
+<div class="drop-position">
+<button id="left" onclick="setSide('left')">左</button>
+<button id="center" onclick="setSide('center')" class="active">中</button>
+<button id="right" onclick="setSide('right')">右</button>
+<button id="all" onclick="setSide('all')">全部</button>
+</div>
+
+<div class="holes" id="holes"></div>
+
+<div class="chart" id="chart"></div>
+
+<div class="stats" id="stats"></div>
+
+</div>
+
+<script>
+
+const KEY="pinball_v2"
+
+let machines={}
+let curMachine="default"
+let curSide="center"
+
+const holeNames=[
+"左1","左2","左3","左4","左5","左6",
+"右6","右5","右4","右3","右2","右1"
+]
+
+function empty(){
+return{
+left:new Array(12).fill(0),
+center:new Array(12).fill(0),
+right:new Array(12).fill(0)
+}
+}
+
+function load(){
+let d=localStorage.getItem(KEY)
+machines=d?JSON.parse(d):{default:empty()}
+}
+
+function save(){
+localStorage.setItem(KEY,JSON.stringify(machines))
+}
+
+function addMachine(){
+let n=newMachine.value.trim()
+if(!n||machines[n])return
+machines[n]=empty()
+curMachine=n
+save()
+fillMachines()
+render()
+newMachine.value=""
+}
+
+function deleteMachine(){
+
+if(Object.keys(machines).length===1){
+alert("至少保留一个机器")
+return
+}
+
+if(!confirm("确定删除当前机器？")) return
+
+delete machines[curMachine]
+
+let keys=Object.keys(machines)
+curMachine=keys[0]
+
+save()
+fillMachines()
+render()
+
+}
+
+function changeMachine(){
+curMachine=machineList.value
+render()
+}
+
+function fillMachines(){
+machineList.innerHTML=""
+Object.keys(machines).forEach(m=>{
+let o=document.createElement("option")
+o.value=m
+o.textContent=m
+if(m==curMachine)o.selected=true
+machineList.appendChild(o)
+})
+}
+
+function setSide(s){
+curSide=s
+document.querySelectorAll(".drop-position button").forEach(b=>b.classList.remove("active"))
+document.getElementById(s).classList.add("active")
+render()
+}
+
+function getArr(){
+
+if(curSide!="all")
+return machines[curMachine][curSide]
+
+let a=new Array(12).fill(0)
+
+;["left","center","right"].forEach(s=>{
+machines[curMachine][s].forEach((v,i)=>a[i]+=v)
+})
+
+return a
+}
+
+function add(i){
+if(curSide==="all") return
+machines[curMachine][curSide][i]++
+save()
+render()
+}
+
+function sub(i){
+if(curSide==="all") return
+if(machines[curMachine][curSide][i]>0){
+machines[curMachine][curSide][i]--
+save()
+render()
+}
+}
+
+function renderHoles(){
+
+holes.innerHTML=""
+
+let arr=getArr()
+
+arr.forEach((n,i)=>{
+
+let d=document.createElement("div")
+d.className="hole"
+
+d.innerHTML=`
+<h3>${holeNames[i]}</h3>
+<div class="hole-btns">
+<button class="add" onclick="add(${i})">+</button>
+<button class="remove" onclick="sub(${i})">−</button>
+</div>
+<div class="count">${n}</div>
+`
+
+holes.appendChild(d)
+
+})
+
+}
+
+function renderChart(){
+
+chart.innerHTML=""
+
+let arr=getArr()
+let total=arr.reduce((a,b)=>a+b,0)
+let max=Math.max(...arr,1)
+
+arr.forEach((n,i)=>{
+
+let p=total?(n/total*100):0
+let dev=p-8.33
+let h=n/max*250
+
+let w=document.createElement("div")
+w.className="bar-wrap"
+
+w.innerHTML=`
+<div class="bar" style="height:${h}px">
+<div class="bar-val">
+${p.toFixed(1)}%<br>
+${n}次<br>
+${dev.toFixed(1)}%
+</div>
+</div>
+<div class="bar-label">${holeNames[i]}</div>
+`
+
+chart.appendChild(w)
+
+})
+
+}
+
+function renderStats(){
+
+let arr=getArr()
+let total=arr.reduce((a,b)=>a+b,0)
+
+let all=0
+Object.values(machines[curMachine]).forEach(a=>{
+all+=a.reduce((x,y)=>x+y,0)
+})
+
+stats.innerText=`当前侧统计：${total} 次 ｜ 机器总统计：${all} 次`
+
+}
+
+function render(){
+renderHoles()
+renderChart()
+renderStats()
+}
+
+function exportCSV(){
+
+let m=machines[curMachine]
+
+let rows=["side,hole,count"]
+
+Object.keys(m).forEach(s=>{
+m[s].forEach((v,i)=>{
+rows.push(`${s},${holeNames[i]},${v}`)
+})
+})
+
+let blob=new Blob([rows.join("\n")])
+let a=document.createElement("a")
+a.href=URL.createObjectURL(blob)
+a.download="pinball_data.csv"
+a.click()
+
+}
+
+load()
+fillMachines()
+setSide("center")
+
+</script>
+</body>
+</html>
